@@ -1,9 +1,11 @@
 from flask import Flask, request
 from flask_socketio import SocketIO, emit
+from flask_cors import CORS
 
 # Flask web server setup
 app = Flask(__name__)
-socketio = SocketIO(app)
+CORS(app)
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Desk control functions
 def control_desk_up():
@@ -25,4 +27,4 @@ def handle_control(data):
 
 # Run the server
 if __name__ == "__main__":
-    socketio.run(app, host='0.0.0.0', port=5000)
+    socketio.run(app, host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True)
