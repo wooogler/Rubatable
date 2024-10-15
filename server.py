@@ -33,16 +33,19 @@ def handle_control(data):
     global desk_thread, stop_event
     
     if data == "UP":
+        print('UP')
         if desk_thread is None or not desk_thread.is_alive():
             stop_event.clear()
             desk_thread = socketio.start_background_task(control_desk, "up")
         result = "Raising the desk."
     elif data == "DOWN":
+        print('DOWN')
         if desk_thread is None or not desk_thread.is_alive():
             stop_event.clear()
             desk_thread = socketio.start_background_task(control_desk, "down")
         result = "Lowering the desk."
     elif data == "STOP":
+        print('STOP')
         if desk_thread and desk_thread.is_alive():
             stop_event.set()
             desk_thread.join()

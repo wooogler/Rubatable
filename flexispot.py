@@ -1,10 +1,10 @@
 import serial
-import RPi.GPIO as GPIO
+import lgpio as GPIO
 import sys
 import time
 import threading
 
-SERIAL_PORT = "/dev/ttyS0" # GPIO14 (TX) and GPIO15 (RX)
+SERIAL_PORT = "/dev/ttyAMA0" 
 relay_1 = 17
 relay_2 = 27
 
@@ -25,18 +25,12 @@ class LoctekMotion():
         """Initialize LoctekMotion"""
         self.serial = serial
 
-        # Or GPIO.BOARD - GPIO Numbering vs Pin numbering
-        GPIO.setmode(GPIO.BCM)
-
-        # Turn desk in operating mode by setting controller pin20 to HIGH
-        # This will allow us to send commands and to receive the current height
-        #GPIO.setup(pin_20, GPIO.OUT)
-        #GPIO.output(pin_20, GPIO.HIGH)
-        
-        GPIO.setup(relay_1, GPIO.OUT)
-        GPIO.setup(relay_2, GPIO.OUT)
-        GPIO.output(relay_1, GPIO.LOW)
-        GPIO.output(relay_2, GPIO.LOW)
+        # GPIO 핀 번호 설정
+        self.h = GPIO.gpiochip_open(0)
+        GPIO.gpio_claim_output(self.h, relay_1)
+        GPIO.gpio_claim_output(self.h, relay_2)
+        GPIO.gpio_write(self.h, relay_1, 0)
+        GPIO.gpio_write(self.h, relay_2, 0)
 
         self.is_moving = False
         self.stop_event = threading.Event()
@@ -144,8 +138,8 @@ class LoctekMotion():
         if command_name in ["up", "down"]:
             self.is_moving = True
             self.stop_event.clear()
-            GPIO.output(relay_1, GPIO.HIGH)
-            GPIO.output(relay_2, GPIO.HIGH)
+            GPIO.gpio_write(self.h, relay_1, 1)
+            GPIO.gpio_write(self.h, relay_2, 1)
             
             start_time = time.time()
             while self.is_moving and (duration is None or time.time() - start_time < duration):
@@ -167,8 +161,8 @@ class LoctekMotion():
         """Stop the desk movement"""
         self.is_moving = False
         self.stop_event.set()
-        GPIO.output(relay_1, GPIO.LOW)
-        GPIO.output(relay_2, GPIO.LOW)
+        GPIO.gpio_write(self.h, relay_1, 0)
+        GPIO.gpio_write(self.h, relay_2, 0)
         height = self.current_height()
         if height is not None:
             print(f"Desk stopped. Current Height: {height}")
@@ -198,7 +192,7 @@ def main():
         sys.exit(1)
     finally:
         print("the end of the program")
-        #GPIO.cleanup()
+        #GPIO.gpiochip_close(self.h)
 
 if __name__ == "__main__":
     main()
