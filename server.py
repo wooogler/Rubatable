@@ -22,14 +22,6 @@ def control_desk(direction):
     locktek.execute_command("wake_up")
     locktek.move(direction)
 
-def monitor_height():
-    while not stop_event.is_set():
-        height = locktek.current_height()
-        if height is not None:
-            socketio.emit('height_update', {'height': height})
-            print(f"Current Height: {height}")
-        socketio.sleep(0.1)
-
 # WebSocket event handler
 @socketio.on('control')
 def handle_control(data):

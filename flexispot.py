@@ -25,6 +25,7 @@ class LoctekMotion():
         """Initialize LoctekMotion"""
         self.serial = serial
         self.stop_event = threading.Event()
+        self.height_event = threading.Event()
 
         # GPIO 핀 번호 설정
         self.h = GPIO.gpiochip_open(0)
@@ -34,7 +35,7 @@ class LoctekMotion():
         GPIO.gpio_write(self.h, relay_2, 0)
 
         self.is_moving = False
-
+        self.current_height_value = None
     def execute_command(self, command_name: str):
         """Execute command"""
         command = SUPPORTED_COMMANDS.get(command_name)
@@ -74,6 +75,9 @@ class LoctekMotion():
         return -1, decimal
 
     def current_height(self):
+        self.serial.reset_input_buffer()
+        self.serial.reset_output_buffer()
+        time.sleep(0.1)
         history = [None] * 5
         msg_type = 0
         msg_len = 0
@@ -123,6 +127,16 @@ class LoctekMotion():
                 print('cannot get height', e)
                 return None
     
+    def read_height_thread(self):
+        while not self.height_event.is_set():
+            height = self.current_height()
+            if height is not None:
+                print(f"현재 높이: {height} inch")
+                self.current_height_value = height
+            else:
+                print("현재 높이를 가져올 수 없습니다.")
+            time.sleep(0.1)
+
     def move(self, command_name: str):
         """Move the desk"""
         print(f"Starting move: {command_name}")
@@ -134,14 +148,25 @@ class LoctekMotion():
         if command_name in ["up", "down"]:
             self.is_moving = True
             self.stop_event.clear()
+            self.height_event.clear()
+
             GPIO.gpio_write(self.h, relay_1, 1)
             GPIO.gpio_write(self.h, relay_2, 1)
+
+            height_thread = threading.Thread(target=self.read_height_thread)
+            height_thread.start()
             
-            while self.is_moving:
-                if self.stop_event.is_set():
-                    break
-                self.execute_command(command_name)
+            try:
+                while self.is_moving:
+                    if self.stop_event.is_set():
+                        break
+                    self.execute_command(command_name)
+                    time.sleep(0.1)  # 너무 빠른 명령 전송을 피하기 위해 지연을 줍니다.
+            finally:
+                self.height_event.set()
+                height_thread.join()
             
+                
         elif command_name == "stop":
             self.stop()
         else:
@@ -157,15 +182,21 @@ class LoctekMotion():
         GPIO.gpio_write(self.h, relay_1, 0)
         GPIO.gpio_write(self.h, relay_2, 0)
 
-    def get_height(self):
-        self.serial.reset_input_buffer()
-        self.serial.reset_output_buffer()
+        # 책상을 멈춘 후 잠시 대기
+        time.sleep(0.5)  # 필요에 따라 시간을 조절하세요
 
+        # 최종 높이 가져오기
+        final_height = self.current_height()
+        if final_height is not None:
+            print(f"멈춘 후 최종 높이: {final_height} inch")
+        else:
+            print("최종 높이를 가져올 수 없습니다.")
+
+    def get_height(self):
         GPIO.gpio_write(self.h, relay_1, 1)
         GPIO.gpio_write(self.h, relay_2, 1)
-        time.sleep(0.5)
+        time.sleep(0.1)
         self.execute_command("preset_4")
-        time.sleep(0.5)
         height = self.current_height()
         GPIO.gpio_write(self.h, relay_1, 0)
         GPIO.gpio_write(self.h, relay_2, 0)
