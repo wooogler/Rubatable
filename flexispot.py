@@ -24,6 +24,7 @@ class LoctekMotion():
     def __init__(self, serial):
         """Initialize LoctekMotion"""
         self.serial = serial
+        self.stop_event = threading.Event()
 
         # GPIO 핀 번호 설정
         self.h = GPIO.gpiochip_open(0)
@@ -33,7 +34,6 @@ class LoctekMotion():
         GPIO.gpio_write(self.h, relay_2, 0)
 
         self.is_moving = False
-        self.stop_event = threading.Event()
 
     def execute_command(self, command_name: str):
         """Execute command"""
@@ -78,17 +78,9 @@ class LoctekMotion():
         msg_type = 0
         msg_len = 0
         valid = False
-        start_time = time.time()
-        timeout = 2
         while True:
-            if time.time() - start_time > timeout:
-                print("Timeout while reading height")
-                return None
             try:
-                # read in each byte
                 data = self.serial.read(1)
-                # 9b starts the data
-                # the value after 9b has the length of the packet
                 if history[0] == 0x9b:
                     msg_len = data[0]
                 if history[1] == 0x9b:
@@ -110,62 +102,80 @@ class LoctekMotion():
                         height2 = height2 * 10
                         height3, decimal3 = self.decode_seven_segment(data[0])
                         if height1 < 0 or height2 < 0 or height3 < 0:
-                            print("Display Empty","          ",end='\r')
-                            print("height1: ",height1, " height2: ", height2, "height3: ", height3)
+                            # print("Display Empty","          ",end='\r')
+                            print("Display Empty")
                             return None
                         else:
                             finalHeight = height1 + height2 + height3
                             decimal = decimal1 or decimal2 or decimal3
                             if decimal == True:
-                                finalHeight = finalHeight/10
-                            print("Height:",finalHeight,"       ",end='\r')
+                                finalHeight = finalHeight / 10
+                            # print("Height:", finalHeight, "       ", end='\r')
+                            print("Height:", finalHeight)
                             return finalHeight
                 history[4] = history[3]
                 history[3] = history[2]
                 history[2] = history[1]
                 history[1] = history[0]
                 history[0] = data[0]
+                
             except Exception as e:
-                print(e)
+                print('cannot get height', e)
                 return None
-    def move(self, command_name: str, duration=None):
+    
+    def move(self, command_name: str):
         """Move the desk"""
+        print(f"Starting move: {command_name}")
         command = SUPPORTED_COMMANDS.get(command_name)
 
         if not command:
             raise Exception("Command not found")
-        
+
         if command_name in ["up", "down"]:
             self.is_moving = True
             self.stop_event.clear()
             GPIO.gpio_write(self.h, relay_1, 1)
             GPIO.gpio_write(self.h, relay_2, 1)
             
-            start_time = time.time()
-            while self.is_moving and (duration is None or time.time() - start_time < duration):
+            while self.is_moving:
                 if self.stop_event.is_set():
                     break
                 self.execute_command(command_name)
-                height = self.current_height()
-                if height is not None:
-                    print(f"Current Height: {height}", end="\r")
-                time.sleep(0.1)
             
-            self.stop()
         elif command_name == "stop":
             self.stop()
         else:
             self.execute_command(command_name)
+        print("Exiting move")
 
     def stop(self):
         """Stop the desk movement"""
+        print("Stopping desk movement")
         self.is_moving = False
         self.stop_event.set()
+
         GPIO.gpio_write(self.h, relay_1, 0)
         GPIO.gpio_write(self.h, relay_2, 0)
+
+    def get_height(self):
+        self.serial.reset_input_buffer()
+        self.serial.reset_output_buffer()
+
+        GPIO.gpio_write(self.h, relay_1, 1)
+        GPIO.gpio_write(self.h, relay_2, 1)
+        time.sleep(0.5)
+        self.execute_command("preset_4")
+        time.sleep(0.5)
         height = self.current_height()
+        GPIO.gpio_write(self.h, relay_1, 0)
+        GPIO.gpio_write(self.h, relay_2, 0)
         if height is not None:
-            print(f"Desk stopped. Current Height: {height}")
+            print(f"현재 높이: {height} inch")
+            return height
+        else:
+            print("현재 높이를 가져올 수 없습니다.")
+            return None
+        
 
 def main():
     try:
@@ -174,9 +184,6 @@ def main():
         locktek = LoctekMotion(ser)
         locktek.execute_command("wake_up")
         locktek.move(command)
-        #locktek.execute_command(command)
-        #locktek.current_height()
-    # Error handling for serial port
     except serial.SerialException as e:
         print(e)
         return
@@ -192,7 +199,7 @@ def main():
         sys.exit(1)
     finally:
         print("the end of the program")
-        #GPIO.gpiochip_close(self.h)
+        # GPIO.gpiochip_close(locktek.h)
 
 if __name__ == "__main__":
     main()
