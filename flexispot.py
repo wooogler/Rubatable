@@ -165,7 +165,6 @@ class LoctekMotion():
             finally:
                 self.height_event.set()
                 height_thread.join()
-            
                 
         elif command_name == "stop":
             self.stop()
@@ -182,8 +181,8 @@ class LoctekMotion():
         GPIO.gpio_write(self.h, relay_1, 0)
         GPIO.gpio_write(self.h, relay_2, 0)
 
-        # 책상을 멈춘 후 잠시 대기
-        time.sleep(0.5)  # 필요에 따라 시간을 조절하세요
+        #책상을 멈춘 후 잠시 대기
+        time.sleep(1)  # 필요에 따라 시간을 조절하세요
 
         # 최종 높이 가져오기
         final_height = self.current_height()
@@ -192,21 +191,67 @@ class LoctekMotion():
         else:
             print("최종 높이를 가져올 수 없습니다.")
 
-    def get_height(self):
+        time.sleep(1)
+
+    def get_height_when_sleep(self):
         GPIO.gpio_write(self.h, relay_1, 1)
         GPIO.gpio_write(self.h, relay_2, 1)
-        time.sleep(0.1)
+        time.sleep(0.5)
         self.execute_command("preset_4")
         height = self.current_height()
         GPIO.gpio_write(self.h, relay_1, 0)
         GPIO.gpio_write(self.h, relay_2, 0)
         if height is not None:
-            print(f"현재 높이: {height} inch")
+            print(f"get_height_when_sleep: {height} inch")
             return height
         else:
-            print("현재 높이를 가져올 수 없습니다.")
+            print("cannot get height when sleep")
             return None
         
+
+    def move_to_height(self, target_height: float):
+        """Move the desk to a specific height"""
+        print(f"Moving to target height: {target_height} inch")
+        self.is_moving = True
+        self.stop_event.clear()
+        self.height_event.clear()
+
+        GPIO.gpio_write(self.h, relay_1, 1)
+        GPIO.gpio_write(self.h, relay_2, 1)
+
+        height_thread = threading.Thread(target=self.read_height_thread)
+        height_thread.start()
+
+        try:
+            while self.is_moving:
+                current_height = self.current_height_value
+                if current_height is None:
+                    current_height = self.get_height_when_sleep()
+                    time.sleep(0.5)
+                    if current_height is None:
+                        print("cannot get height so stop")
+                        self.stop()
+                        break
+
+                if abs(current_height - target_height) < 0.5:  # 목표 높이에 도달하면 멈춤
+                    print(f"stop move to target height")
+                    self.stop()
+                    break
+
+                if current_height < target_height:
+                    time.sleep(0.5)
+                    print("move up to target height")
+                    self.execute_command("up")
+                else:
+                    time.sleep(0.5)
+                    print("move down to target height")
+                    self.execute_command("down")
+
+        finally:
+            self.height_event.set()
+            height_thread.join()
+
+        print("Exiting move to height")
 
 def main():
     try:

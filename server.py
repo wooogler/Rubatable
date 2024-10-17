@@ -47,9 +47,17 @@ def handle_control(data):
         result = "Desk movement stopped."
     elif data == "GET_HEIGHT":
         print('GET_HEIGHT')
-        height = locktek.get_height()
-
+        height = locktek.get_height_when_sleep()
         result = "Getting the desk height."
+    elif isinstance(data, dict) and data.get("action") == "MOVE_TO_HEIGHT":
+        target_height = data.get("height")
+        if target_height is not None:
+            print(f'MOVE_TO_HEIGHT: {target_height}')
+            if desk_thread is None or not desk_thread.is_alive():
+                desk_thread = socketio.start_background_task(locktek.move_to_height, target_height)
+            result = f"Moving to height {target_height}."
+        else:
+            result = "Invalid height value."
     else:
         result = "Invalid command."
 
