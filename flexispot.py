@@ -24,6 +24,7 @@ class LoctekMotion():
     def __init__(self, serial):
         """Initialize LoctekMotion"""
         self.serial = serial
+        self.get_current_height_timeout = 3
         self.stop_event = threading.Event()
         self.height_event = threading.Event()
 
@@ -82,7 +83,8 @@ class LoctekMotion():
         msg_type = 0
         msg_len = 0
         valid = False
-        while True:
+        start_time = time.time()
+        while time.time() - start_time < self.get_current_height_timeout:
             try:
                 data = self.serial.read(1)
                 if history[0] == 0x9b:
@@ -126,15 +128,17 @@ class LoctekMotion():
             except Exception as e:
                 print('cannot get height', e)
                 return None
+        print('Timeout while getting height')
+        return None
     
     def read_height_thread(self):
         while not self.height_event.is_set():
             height = self.current_height()
             if height is not None:
-                print(f"현재 높이: {height} inch")
+                print(f"current height: {height} inch")
                 self.current_height_value = height
             else:
-                print("현재 높이를 가져올 수 없습니다.")
+                print("cannot get current height")
             time.sleep(0.1)
 
     def move(self, command_name: str):
@@ -161,7 +165,7 @@ class LoctekMotion():
                     if self.stop_event.is_set():
                         break
                     self.execute_command(command_name)
-                    time.sleep(0.1)  # 너무 빠른 명령 전송을 피하기 위해 지연을 줍니다.
+                    time.sleep(0.5)
             finally:
                 self.height_event.set()
                 height_thread.join()
@@ -222,16 +226,19 @@ class LoctekMotion():
         height_thread = threading.Thread(target=self.read_height_thread)
         height_thread.start()
 
+        time.sleep(0.5)
+
         try:
             while self.is_moving:
                 current_height = self.current_height_value
                 if current_height is None:
                     current_height = self.get_height_when_sleep()
-                    time.sleep(0.5)
+                    
                     if current_height is None:
                         print("cannot get height so stop")
                         self.stop()
                         break
+                time.sleep(1)
 
                 if abs(current_height - target_height) < 0.5:  # 목표 높이에 도달하면 멈춤
                     print(f"stop move to target height")
@@ -240,11 +247,9 @@ class LoctekMotion():
 
                 if current_height < target_height:
                     time.sleep(0.5)
-                    print("move up to target height")
                     self.execute_command("up")
                 else:
                     time.sleep(0.5)
-                    print("move down to target height")
                     self.execute_command("down")
 
         finally:
@@ -256,7 +261,7 @@ class LoctekMotion():
 def main():
     try:
         command = sys.argv[1]
-        ser = serial.Serial(SERIAL_PORT, 9600, timeout=500)
+        ser = serial.Serial(SERIAL_PORT, 9600, timeout=1)
         locktek = LoctekMotion(ser)
         locktek.execute_command("wake_up")
         locktek.move(command)
