@@ -22,7 +22,7 @@ class LoctekMotion():
 
     def __init__(self, socketio):
         """Initialize LoctekMotion"""
-        self.serial = serial.Serial(SERIAL_PORT, 9600, timeout=None)
+        self.serial = serial.Serial(SERIAL_PORT, 9600, timeout=5)
         self.socketio = socketio
         self.get_current_height_timeout = 3
         self.get_height_when_sleep_timeout = 3
