@@ -38,6 +38,12 @@ class LoctekMotion():
 
         self.is_moving = False
         self.current_height_value = None
+
+        self.last_sent_height = None
+
+        self.height_thread = threading.Thread(target=self.read_height_thread, daemon=True)
+        self.height_thread.start()
+
     def execute_command(self, command_name: str):
         """Execute command"""
         command = SUPPORTED_COMMANDS.get(command_name)
@@ -109,16 +115,14 @@ class LoctekMotion():
                         height2 = height2 * 10
                         height3, decimal3 = self.decode_seven_segment(data[0])
                         if height1 < 0 or height2 < 0 or height3 < 0:
-                            # print("Display Empty","          ",end='\r')
-                            print("Display Empty")
+                            print("Display Error","          ",end='\r')
                             return None
                         else:
                             finalHeight = height1 + height2 + height3
                             decimal = decimal1 or decimal2 or decimal3
                             if decimal == True:
                                 finalHeight = finalHeight / 10
-                            # print("Height:", finalHeight, "       ", end='\r')
-                            print("Height:", finalHeight)
+                            print("Height:", finalHeight, "       ", end='\r')
                             return finalHeight
                 history[4] = history[3]
                 history[3] = history[2]
@@ -129,19 +133,31 @@ class LoctekMotion():
             except Exception as e:
                 print('cannot get height', e)
                 return None
-        print('Timeout while getting height')
         return None
     
     def read_height_thread(self):
         while not self.height_event.is_set():
             height = self.current_height()
             if height is not None:
-                print(f"current height: {height} inch")
                 self.current_height_value = height
-                self.socketio.emit('height_update', {'height': height})
+                if self.last_sent_height != height:
+                    print(f"current height: {height} inch")
+                    self.socketio.emit('height_update', {'height': height})
+                    self.last_sent_height = height
             else:
-                print("cannot get current height")
+                if self.current_height_value is None:
+                    height = self.get_height_when_sleep()
+                    if height is not None:
+                        self.current_height_value = height
+
+                        if self.last_sent_height != height:
+                            print(f"current height: {height} inch")
+                            self.socketio.emit('height_update', {'height': height})
+                            self.last_sent_height = height
+                    else:
+                        print("Failed to initialize current height")
             time.sleep(0.1)
+
 
     def move(self, command_name: str):
         """Move the desk"""
@@ -158,9 +174,6 @@ class LoctekMotion():
 
             GPIO.gpio_write(self.h, relay_1, 1)
             GPIO.gpio_write(self.h, relay_2, 1)
-
-            height_thread = threading.Thread(target=self.read_height_thread)
-            height_thread.start()
             
             try:
                 while self.is_moving:
@@ -169,8 +182,7 @@ class LoctekMotion():
                     self.execute_command(command_name)
                     time.sleep(0.5)
             finally:
-                self.height_event.set()
-                height_thread.join()
+                pass
         else:
             self.execute_command(command_name)
         print("Exiting move")
@@ -181,18 +193,11 @@ class LoctekMotion():
         self.is_moving = False
         self.stop_event.set()
 
+        time.sleep(5)
+
         GPIO.gpio_write(self.h, relay_1, 0)
         GPIO.gpio_write(self.h, relay_2, 0)
-
-        time.sleep(2)
-
-        # 최종 높이 가져오기
-        final_height = self.current_height()
-        if final_height is not None:
-            print(f"final height: {final_height} inch")
-            self.socketio.emit('height_update', {'height': final_height})
-        else:
-            print("최종 높이를 가져올 수 없습니다.")
+        # time.sleep(1)
 
     def get_height_when_sleep(self, check: bool = True):
         GPIO.gpio_write(self.h, relay_1, 1)
@@ -206,6 +211,8 @@ class LoctekMotion():
                 print(f"get_height_when_sleep: {height} inch")
                 break
             else:
+                GPIO.gpio_write(self.h, relay_1, 0)
+                GPIO.gpio_write(self.h, relay_2, 0)
                 print("cannot get height, retrying...")
 
         if check:
@@ -220,13 +227,9 @@ class LoctekMotion():
         print(f"Moving to target height: {target_height} inch")
         self.is_moving = True
         self.stop_event.clear()
-        self.height_event.clear()
 
         GPIO.gpio_write(self.h, relay_1, 1)
         GPIO.gpio_write(self.h, relay_2, 1)
-
-        height_thread = threading.Thread(target=self.read_height_thread)
-        height_thread.start()
 
         time.sleep(0.5)
 
@@ -240,7 +243,6 @@ class LoctekMotion():
                         print("최종 높이를 가져올 수 없습니다.")
                         self.stop()
                         break
-                
 
                 if abs(current_height - target_height) < 0.5:  # 목표 높이에 도달하면 멈춤
                     print(f"stop move to target height")
@@ -255,7 +257,6 @@ class LoctekMotion():
                     self.execute_command("down")
 
         finally:
-            self.height_event.set()
-            height_thread.join()
+            pass
 
         print("Exiting move to height")
