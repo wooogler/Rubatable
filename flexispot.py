@@ -6,6 +6,7 @@ import serial
 SERIAL_PORT = "/dev/ttyAMA0" 
 relay_1 = 17
 relay_2 = 27
+ir_sensor_pin = 22
 
 SUPPORTED_COMMANDS = {
     "up": bytearray(b'\x9b\x06\x02\x01\x00\xfc\xa0\x9d'),
@@ -28,6 +29,7 @@ class LoctekMotion():
         self.get_height_when_sleep_timeout = 3
         self.stop_event = threading.Event()
         self.height_event = threading.Event()
+        self.ir_sensor_event = threading.Event()
 
         # GPIO 핀 번호 설정
         self.h = GPIO.gpiochip_open(0)
@@ -36,6 +38,8 @@ class LoctekMotion():
         GPIO.gpio_write(self.h, relay_1, 0)
         GPIO.gpio_write(self.h, relay_2, 0)
 
+        self.ir_sensor_pin = ir_sensor_pin
+
         self.is_moving = False
         self.current_height_value = None
 
@@ -43,6 +47,21 @@ class LoctekMotion():
 
         self.height_thread = threading.Thread(target=self.read_height_thread, daemon=True)
         self.height_thread.start()
+
+        self.ir_thread = threading.Thread(target=self.monitor_ir_sensor, daemon=True)
+        self.ir_thread.start()
+
+    def monitor_ir_sensor(self):
+        while not self.ir_sensor_event.is_set():
+            GPIO.gpio_claim_input(self.h, self.ir_sensor_pin)
+            ir_sensor_value = GPIO.gpio_read(self.h, self.ir_sensor_pin)
+            if ir_sensor_value == 1:
+                # print("IR Sensor: Object detected", end='\r')
+                self.socketio.emit('sensor', {'object_detected': True})
+            else:
+                # print("IR Sensor: No object detected", end='\r')
+                self.socketio.emit('sensor', {'object_detected': False})
+            time.sleep(0.5)
 
     def execute_command(self, command_name: str):
         """Execute command"""
@@ -244,17 +263,17 @@ class LoctekMotion():
                         self.stop()
                         break
 
-                if abs(current_height - target_height) < 0.5:  # 목표 높이에 도달하면 멈춤
+                if abs(current_height - target_height) < 1.0:  # 목표 높이에 도달하면 멈춤
                     print(f"stop move to target height")
                     self.stop()
                     break
 
                 if current_height < target_height:
-                    time.sleep(0.5)
                     self.execute_command("up")
                 else:
-                    time.sleep(0.5)
                     self.execute_command("down")
+
+                time.sleep(0.5)
 
         finally:
             pass
