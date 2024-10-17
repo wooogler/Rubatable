@@ -48,6 +48,7 @@ def handle_control(data):
     elif data == "GET_HEIGHT":
         print('GET_HEIGHT')
         height = locktek.get_height_when_sleep()
+        socketio.emit('height_update', {'height': height})
         result = "Getting the desk height."
     elif isinstance(data, dict) and data.get("action") == "MOVE_TO_HEIGHT":
         target_height = data.get("height")
