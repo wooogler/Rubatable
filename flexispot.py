@@ -170,9 +170,6 @@ class LoctekMotion():
             finally:
                 self.height_event.set()
                 height_thread.join()
-                
-        elif command_name == "stop":
-            self.stop()
         else:
             self.execute_command(command_name)
         print("Exiting move")
@@ -186,17 +183,12 @@ class LoctekMotion():
         GPIO.gpio_write(self.h, relay_1, 0)
         GPIO.gpio_write(self.h, relay_2, 0)
 
-        #책상을 멈춘 후 잠시 대기
-        time.sleep(1)  # 필요에 따라 시간을 조절하세요
-
         # 최종 높이 가져오기
         final_height = self.current_height()
         if final_height is not None:
             print(f"final height: {final_height} inch")
         else:
             print("최종 높이를 가져올 수 없습니다.")
-
-        time.sleep(1)
 
     def get_height_when_sleep(self, check: bool = True):
         GPIO.gpio_write(self.h, relay_1, 1)
@@ -218,7 +210,6 @@ class LoctekMotion():
             GPIO.gpio_write(self.h, relay_2, 0)
 
         return height
-        
 
     def move_to_height(self, target_height: float):
         """Move the desk to a specific height"""
@@ -264,30 +255,3 @@ class LoctekMotion():
             height_thread.join()
 
         print("Exiting move to height")
-
-def main():
-    try:
-        command = sys.argv[1]
-        ser = serial.Serial(SERIAL_PORT, 9600, timeout=1)
-        locktek = LoctekMotion(ser)
-        locktek.execute_command("wake_up")
-        locktek.move(command)
-    except serial.SerialException as e:
-        print(e)
-        return
-    # Error handling for command line arguments
-    except IndexError:
-        program = sys.argv[0]
-        print("Usage: python3",program,"[COMMAND]")
-        print("Supported Commands:")
-        for command in SUPPORTED_COMMANDS:
-            print("\t", command)
-        sys.exit(1)
-    except KeyboardInterrupt:
-        sys.exit(1)
-    finally:
-        print("the end of the program")
-        GPIO.gpiochip_close(locktek.h)
-
-if __name__ == "__main__":
-    main()
