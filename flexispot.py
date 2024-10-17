@@ -183,6 +183,8 @@ class LoctekMotion():
         GPIO.gpio_write(self.h, relay_1, 0)
         GPIO.gpio_write(self.h, relay_2, 0)
 
+        time.sleep(1)
+
         # 최종 높이 가져오기
         final_height = self.current_height()
         if final_height is not None:
