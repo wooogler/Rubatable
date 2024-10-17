@@ -25,6 +25,7 @@ class LoctekMotion():
         """Initialize LoctekMotion"""
         self.serial = serial
         self.get_current_height_timeout = 3
+        self.get_height_when_sleep_timeout = 3
         self.stop_event = threading.Event()
         self.height_event = threading.Event()
 
@@ -200,19 +201,23 @@ class LoctekMotion():
     def get_height_when_sleep(self, check: bool = True):
         GPIO.gpio_write(self.h, relay_1, 1)
         GPIO.gpio_write(self.h, relay_2, 1)
-        time.sleep(0.5)
-        self.execute_command("preset_4")
-        height = self.current_height()
+        current_time = time.time()
+        while time.time() - current_time < self.get_height_when_sleep_timeout:
+            time.sleep(0.5)
+            self.execute_command("preset_4")
+            height = self.current_height()
+            if height is not None:
+                print(f"get_height_when_sleep: {height} inch")
+                break
+            else:
+                print("cannot get height, retrying...")
+
         if check:
             time.sleep(0.5)
             GPIO.gpio_write(self.h, relay_1, 0)
             GPIO.gpio_write(self.h, relay_2, 0)
-        if height is not None:
-            print(f"get_height_when_sleep: {height} inch")
-            return height
-        else:
-            print("cannot get height when sleep")
-            return None
+
+        return height
         
 
     def move_to_height(self, target_height: float):
@@ -282,7 +287,7 @@ def main():
         sys.exit(1)
     finally:
         print("the end of the program")
-        # GPIO.gpiochip_close(locktek.h)
+        GPIO.gpiochip_close(locktek.h)
 
 if __name__ == "__main__":
     main()
