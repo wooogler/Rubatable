@@ -1,7 +1,6 @@
 from flask import Flask, request
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
-import serial
 from flexispot import LoctekMotion, SERIAL_PORT
 import threading
 
@@ -11,8 +10,7 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Desk control setup
-ser = serial.Serial(SERIAL_PORT, 9600, timeout=None)
-locktek = LoctekMotion(ser, socketio)
+locktek = LoctekMotion(socketio)
 
 desk_thread = None
 height_thread = None
