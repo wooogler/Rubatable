@@ -191,20 +191,22 @@ class LoctekMotion():
         # 최종 높이 가져오기
         final_height = self.current_height()
         if final_height is not None:
-            print(f"멈춘 후 최종 높이: {final_height} inch")
+            print(f"final height: {final_height} inch")
         else:
             print("최종 높이를 가져올 수 없습니다.")
 
         time.sleep(1)
 
-    def get_height_when_sleep(self):
+    def get_height_when_sleep(self, check: bool = True):
         GPIO.gpio_write(self.h, relay_1, 1)
         GPIO.gpio_write(self.h, relay_2, 1)
         time.sleep(0.5)
         self.execute_command("preset_4")
         height = self.current_height()
-        GPIO.gpio_write(self.h, relay_1, 0)
-        GPIO.gpio_write(self.h, relay_2, 0)
+        if check:
+            time.sleep(0.5)
+            GPIO.gpio_write(self.h, relay_1, 0)
+            GPIO.gpio_write(self.h, relay_2, 0)
         if height is not None:
             print(f"get_height_when_sleep: {height} inch")
             return height
@@ -232,13 +234,13 @@ class LoctekMotion():
             while self.is_moving:
                 current_height = self.current_height_value
                 if current_height is None:
-                    current_height = self.get_height_when_sleep()
-                    
+                    current_height = self.get_height_when_sleep(check=False)
+                    time.sleep(1)
                     if current_height is None:
-                        print("cannot get height so stop")
+                        print("최종 높이를 가져올 수 없습니다.")
                         self.stop()
                         break
-                time.sleep(1)
+                
 
                 if abs(current_height - target_height) < 0.5:  # 목표 높이에 도달하면 멈춤
                     print(f"stop move to target height")
