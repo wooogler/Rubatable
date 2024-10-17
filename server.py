@@ -12,7 +12,7 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Desk control setup
 ser = serial.Serial(SERIAL_PORT, 9600, timeout=None)
-locktek = LoctekMotion(ser)
+locktek = LoctekMotion(ser, socketio)
 
 desk_thread = None
 height_thread = None

@@ -21,9 +21,10 @@ SUPPORTED_COMMANDS = {
 
 class LoctekMotion():
 
-    def __init__(self, serial):
+    def __init__(self, serial, socketio):
         """Initialize LoctekMotion"""
         self.serial = serial
+        self.socketio = socketio
         self.get_current_height_timeout = 3
         self.get_height_when_sleep_timeout = 3
         self.stop_event = threading.Event()
@@ -138,6 +139,7 @@ class LoctekMotion():
             if height is not None:
                 print(f"current height: {height} inch")
                 self.current_height_value = height
+                self.socketio.emit('height_update', {'height': height})
             else:
                 print("cannot get current height")
             time.sleep(0.1)
@@ -183,12 +185,13 @@ class LoctekMotion():
         GPIO.gpio_write(self.h, relay_1, 0)
         GPIO.gpio_write(self.h, relay_2, 0)
 
-        time.sleep(1)
+        time.sleep(2)
 
         # 최종 높이 가져오기
         final_height = self.current_height()
         if final_height is not None:
             print(f"final height: {final_height} inch")
+            self.socketio.emit('height_update', {'height': final_height})
         else:
             print("최종 높이를 가져올 수 없습니다.")
 
